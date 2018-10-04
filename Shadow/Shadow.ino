@@ -35,7 +35,6 @@ byte joystickDeadZoneRange = 5;  // For controllers that centering problems, use
 
 int steeringNeutral = 90;        // Move this by one or two to set the center point for the steering servo
 
-#define reverseSteering          // Comment this to have normal stering direction (Lots of RC cars are built with reverseSteering by default)
 int steeringRightEndpoint = 120; // Move this down (below 180) if you need to set a narrower Right turning radius
 int steeringLeftEndpoint = 0;    // Move this up (above 0) if you need to set a narrower Left turning radius
 
@@ -54,6 +53,8 @@ int maxReverseSpeed = 65;        // Move this up (above 0, but below 90) if you 
 #define steeringPin 4            // connect this pin to steering servo for MSE (R/C mode)
 #define drivePin 3               // connect this pin to ESC for forward/reverse drive (R/C mode)
 #define L2Throttle               // comment this to use Joystick throttle (instead of L2 throttle)
+#define reverseSteeringPin 7     // Pull pin down (connect a ~10k resistor from here to ground) to reverse steering servo controls
+pinMode(reverseSteeringPin, INPUT_PULLUP)
 
 // ---------------------------------------------------------------------------------------
 //                          Sound Control Settings
@@ -122,7 +123,7 @@ Servo steeringSignal;
 Servo driveSignal;
 int steeringValue, driveValue;   //will hold steering/drive values (-100 to 100)
 int prevSteeringValue, prevDriveValue; //will hold steering/drive speed values (-100 to 100)
-
+int steeringFlip = 1;
 
 // =======================================================================================
 //                          Main Program
@@ -159,6 +160,13 @@ void setup()
   Serial.print(F("\r\nMSE Drive Running"));
   steeringSignal.attach(steeringPin);
   driveSignal.attach(drivePin);
+  digitalWrite(reverseSteeringPin, HIGH)
+  steeringFlip = digitalRead(reverseSteeringPin);
+  if (steeringFlip == LOW) {
+    steeringLeftEndpoint += steeringRightEndpoint;
+    steeringRightEndpoint = steeringLeftEndpoint - steeringRightEndpoint;
+    steeringLeftEndpoint -= steeringRightEndpoint;
+  }
 }
 
 boolean readUSB()
@@ -414,7 +422,7 @@ boolean ps3Drive(PS3BT* myPS3 = PS3Nav)
       #ifdef L2Throttle
       // map the steering direction
       if (((stickX <= 128 - joystickDeadZoneRange) || (stickX >= 128 + joystickDeadZoneRange))) {
-        steeringValue = map(stickX, 0, 255, steeringLeftEndpoint, steeringRightEndpoint);
+        steeringValue = map(stickX, 0, 255, min(steeringLeftEndpoint, steeringRightEndpoint), max(steeringLeftEndpoint, steeringRightEndpoint));
       } else {
         steeringValue = steeringNeutral;
         driveValue = driveNeutral;
@@ -433,11 +441,7 @@ boolean ps3Drive(PS3BT* myPS3 = PS3Nav)
       #else
       if (((stickX <= 128 - joystickDeadZoneRange) || (stickX >= 128 + joystickDeadZoneRange)) ||
           ((stickY <= 128 - joystickDeadZoneRange) || (stickY >= 128 + joystickDeadZoneRange))) {
-            #ifdef reverseSteering
-              steeringValue = map(stickX, 0, 255, steeringRightEndpoint, steeringLeftEndpoint);
-            #else
-              steeringValue = map(stickX, 0, 255, steeringLeftEndpoint, steeringRightEndpoint);
-            #endif
+            steeringValue = map(stickX, 0, 255, steeringRightEndpoint, steeringLeftEndpoint);
             // These values must cross 90 (as that is stopped)
             // The closer these values are the more speed control you get
             driveValue = map(stickY, 0, 255, maxForwardSpeed, maxReverseSpeed);
